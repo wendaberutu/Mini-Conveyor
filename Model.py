@@ -139,7 +139,7 @@ class Attention(torch.nn.Module):
 class PSABlock(torch.nn.Module):
     def __init__(self, ch, num_head):
         super().__init__()
-        self.conv1 = Attention(ch, num_head)
+        self.conv1 = Attention(ch, num_head=2)
         self.conv2 = torch.nn.Sequential(Conv(ch,ch * 2, activation=torch.nn.SiLU()),
                                          Conv(ch * 2, ch, activation=torch.nn.Identity()))
     
@@ -151,7 +151,7 @@ class PSA(torch.nn.Module):
         super().__init__()
         self.conv1 = Conv(ch, 2 * (ch // 2), torch.nn.SiLU())
         self.conv2 = Conv(2 *(ch // 2), ch, torch.nn.SiLU())
-        self.res_m = torch.nn.Sequential(*(PSABlock(ch // 2, 4)for _ in range (n)))
+        self.res_m = torch.nn.Sequential(*(PSABlock(ch // 2, 2)for _ in range (n)))
     
     def forward(self, x):
         x,y = self.conv1(x).chunk(2,1)
@@ -259,13 +259,13 @@ class YOLOv11(nn.Module):
     def __init__(self, num_classes=80):
         super().__init__()
         self.backbone = nn.Sequential(
-            Conv(3, 32, SiLU(), k=3, p=1),
-            C3K2(32, 64, n=1, csp=False, r=2),
-            C3K2(64, 128, n=2, csp=True, r=2),
-            SPPF(128, 256)
+            Conv(3, 8, SiLU(), k=3, p=1),
+            C3K2(8, 16, n=1, csp=False, r=2),
+            C3K2(16, 32, n=2, csp=True, r=2),
+            SPPF(32, 64)
         )
-        self.neck = PSA(256, n=2)
-        self.head = Head(nc=num_classes, filters=[256])
+        self.neck = PSA(64, n=1)
+        self.head = Head(nc=num_classes, filters=[64])
 
     def forward(self, x):
         x = [self.backbone(x)]
@@ -274,6 +274,6 @@ class YOLOv11(nn.Module):
 
 if __name__ == '__main__':
     model = YOLOv11(num_classes=1)
-    x = torch.randn(1, 3, 224, 224)
+    x = torch.randn(1, 3, 128, 128)
     out = model(x)
     print(out.shape)  # [1, total_output_channel, num_anchors]
