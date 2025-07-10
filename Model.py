@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+
 #--------------------
 #basic Block 
 #-----------------------
@@ -106,58 +107,28 @@ class SPPF (nn.Module):
 #            NECK 
 #----------------------------------
 
-# code Attention Module 
-class Attention(torch.nn.Module):
-    def __init__(self,ch, num_head):
+# Pengganti PSABlock tanpa Attention (pakai Residual)
+class PSABlock(nn.Module):
+    def __init__(self, ch):
         super().__init__()
-        self.num_head = num_head
-        self.dim_head = ch // num_head
-        self.dim_key = self.dim_head // 2
-        self.scale = self.dim_key ** -0.5
+        self.block = Residual(ch)
 
-        self.qkv = Conv(ch,ch + self.dim_key * num_head * 2, torch.nn.Identity())
-
-
-        self.conv1 = Conv(ch,ch, torch.nn.Identity(), k=3, p=1, g=ch)
-        self.conv2 = Conv(ch,ch, torch.nn.Identity())
-    
     def forward(self, x):
-        b, c, h, w = x.shape
+        return self.block(x)
 
-        qkv = self.qkv(x)
-        qkv = qkv.view(b, self.num_head, self.dim_key * 2 +self.dim_head, h * w)
-
-        q,k,v = qkv.split([self.dim_key, self.dim_key, self.dim_head], dim=2)
-
-        attn = (q.transpose(-2, -1)@ k)* self.scale
-        attn = attn.softmax(dim =-1)
-
-        x=(v @ attn.transpose(-2, -1)).view(b,c,h,w)+ self.conv1(v.reshape(b,c,h,w))
-        return self.conv2(x)
-    
-#code untuk Module PSA 
-class PSABlock(torch.nn.Module):
-    def __init__(self, ch, num_head):
-        super().__init__()
-        self.conv1 = Attention(ch, num_head=2)
-        self.conv2 = torch.nn.Sequential(Conv(ch,ch * 2, activation=torch.nn.SiLU()),
-                                         Conv(ch * 2, ch, activation=torch.nn.Identity()))
-    
-    def forward(self, x):
-        x = x + self.conv1(x)
-        return x + self.conv2(x)
-class PSA(torch.nn.Module):
+# Pengganti PSA yang ringan
+class PSA(nn.Module):
     def __init__(self, ch, n):
         super().__init__()
-        self.conv1 = Conv(ch, 2 * (ch // 2), torch.nn.SiLU())
-        self.conv2 = Conv(2 *(ch // 2), ch, torch.nn.SiLU())
-        self.res_m = torch.nn.Sequential(*(PSABlock(ch // 2, 2)for _ in range (n)))
-    
-    def forward(self, x):
-        x,y = self.conv1(x).chunk(2,1)
+        self.conv1 = Conv(ch, 2 * (ch // 2), SiLU())
+        self.conv2 = Conv(2 * (ch // 2), ch, SiLU())
+        self.res_m = nn.Sequential(*[PSABlock(ch // 2) for _ in range(n)])
 
-        return self.conv2(torch.cat(tensors=(x, self.res_m(y)), dim =1))
-    
+    def forward(self, x):
+        x, y = self.conv1(x).chunk(2, 1)
+        y = self.res_m(y)
+        return self.conv2(torch.cat((x, y), dim=1))
+
 #----------------------------------
 #            Head 
 
@@ -274,6 +245,7 @@ class YOLOv11(nn.Module):
 
 if __name__ == '__main__':
     model = YOLOv11(num_classes=1)
+    model.eval()  # ⬅️ Tambahkan ini
     x = torch.randn(1, 3, 128, 128)
     out = model(x)
-    print(out.shape)  # [1, total_output_channel, num_anchors]
+    print(out.shape)
