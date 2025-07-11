@@ -1,0 +1,10 @@
+# dataset.yaml
+path: D:/wenda/Mini Conveyor/dataset # folder utama dataset
+
+train: images/train
+val: images/val
+test: images/test
+
+# Segmentasi kelas
+nc: 1
+names: ["sarang"]
