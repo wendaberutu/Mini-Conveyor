@@ -1,7 +1,7 @@
 from ultralytics import YOLO
 import cv2
 import numpy as np
-import deep pro 
+
 
 # Load gambar
 img = cv2.imread(r"D:\wenda\Mini Conveyor\dataset\images\train\img1695280767.jpg")
