@@ -1,40 +1,74 @@
 from ultralytics import YOLO
-import cv2
 import numpy as np
+import cv2
 
+class YoloSegmentor:
+    def __init__(self, model_path, confidence):
+        self.model = YOLO(model_path)
+        self.classList = ["Sarang"]  # Ubah sesuai kelas kamu
+        self.confidence = confidence
 
-# Load gambar
-img = cv2.imread(r"D:\wenda\Mini Conveyor\dataset\images\train\img1695280767.jpg")
-img_show = img.copy()
+    def segment(self, image):
+        results = self.model.predict(image, conf=self.confidence, iou=0.5, task="segment")
+        result = results[0]
+        return self.extract_segments(result)
+    
+    def extract_segments(self, result):
+        segments = []
 
-# Load model
-model = YOLO("best.pt")
+        if not hasattr(result, "masks") or result.masks is None:
+            return segments
+        masks = result.masks.data.cpu().numpy()
+        boxes = result.boxes
+        class_names = result.names
 
-# Inference
-results = model(img, conf=0.1)
+        for i, box in enumerate(boxes):
+            x1,y1,x2,y2 =box.xyxy[0].tolist()
+            cls_id =int(box.cls[0])
+            conf =float(box.conf[0])
 
-if results[0].masks is not None:
-    masks = results[0].masks.data.cpu().numpy()
-    print(f"✅ Jumlah mask: {len(masks)}")
+            if class_names[cls_id] not in self.classList:
+                continue
+            mask = masks[i]
+            segments.append({
+                "bbox": [int(x1), int(y1), int(x2), int(y2)],
+                "class_id": cls_id,
+                "confidence": conf,
+                "mask": mask    
+            })
+        return segments
+    
+def main():
+    detector = YoloSegmentor(
+        model_path=r"D:\wenda\Mini Conveyor\runs\segment\model_segmentation\weights\best.pt",
+        confidence=0.3
+    )   
 
-    for i, mask in enumerate(masks):
-        mask_uint8 = (mask * 255).astype(np.uint8)
+    image = cv2.imread(r"D:\wenda\Mini Conveyor\dataset\images\test\sarang_gbj-1747644815301.jpg")
+    if image is None:
+        print("Gambar tidak ditemukan. Cek path.")
+        return
 
-        # Resize mask ke ukuran gambar
-        mask_resized = cv2.resize(mask_uint8, (img.shape[1], img.shape[0]))
+    print("Image loaded:", image.shape)
 
-        # Warna acak
-        color = np.random.randint(0, 255, (1, 3), dtype=np.uint8).tolist()[0]
-        color_mask = np.stack([mask_resized]*3, axis=-1)
-        color_mask = (color_mask * np.array(color).reshape(1, 1, 3) / 255).astype(np.uint8)
+    segmen = detector.segment(image)
 
-        # Overlay
-        img_show = cv2.addWeighted(img_show, 1.0, color_mask, 0.5, 0)
+    overlay = image.copy()
+    for segment in segmen:
+        bbox = segment["bbox"]
+        mask = segment["mask"]
+        class_id = segment["class_id"]
+        confidence = segment["confidence"]
 
-    # Tampilkan & simpan
-    cv2.imshow("Segmented Result", img_show)
-    cv2.imwrite("output_segmented.jpg", img_show)
+        mask = cv2.resize(mask.astype(np.uint8), (image.shape[1], image.shape[0]))
+        mask_colored = np.zeros_like(image)
+        mask_colored[mask > 0] = [0, 255, 0]
+        overlay = cv2.addWeighted(overlay, 1.0, mask_colored, 0.5, 0)
+
+        cv2.rectangle(overlay, (bbox[0], bbox[1]), (bbox[2], bbox[3]), (0, 255, 0), 2)
+        cv2.putText(overlay, f"Class: {class_id}, Conf: {confidence:.2f}", 
+                    (bbox[0], bbox[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+
+    cv2.imshow("Segmented Image", overlay)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
-else:
-    print("❌ Tidak ada mask ditemukan.")

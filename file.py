@@ -3,7 +3,7 @@ from pathlib import Path
 import shutil
 
 # Direktori asal campuran
-source_dir = Path(r"C:\Users\WALETA-PROJECT-PC\Downloads\barang jadi badan\barang jadi badan")  # ganti sesuai folder asalmu
+source_dir = Path(r"D:\wenda\Mini Conveyor\Hasil_kaki full sarang")  # ganti sesuai folder asalmu
 
 # Folder tujuan
 images_dir = Path("dataset/images")
